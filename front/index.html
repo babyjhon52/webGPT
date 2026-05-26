@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BMSTUGPT</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+  <main class="auth-page" id="authPage">
+    <section class="auth-card" aria-labelledby="authTitle">
+      <p class="eyebrow">Добро пожаловать</p>
+      <h1 id="authTitle">BMSTUGPT</h1>
+
+      <div class="auth-switch" role="tablist" aria-label="Выбор формы">
+        <button class="auth-tab is-active" type="button" data-auth-mode="login">
+          Вход
+        </button>
+        <button class="auth-tab" type="button" data-auth-mode="register">
+          Регистрация
+        </button>
+      </div>
+
+      <form class="auth-form" id="authForm">
+        <div class="field is-hidden" data-register-only>
+          <label for="nameInput">Имя</label>
+          <input id="nameInput" name="name" type="text" autocomplete="name" />
+        </div>
+
+        <div class="field">
+          <label for="loginInput">Логин</label>
+          <input id="loginInput" name="login" type="text" autocomplete="username" required />
+        </div>
+
+        <div class="field is-hidden" data-register-only>
+          <label for="emailInput">Почта</label>
+          <input id="emailInput" name="email" type="email" autocomplete="email" />
+        </div>
+
+        <div class="field">
+          <label for="passwordInput">Пароль</label>
+          <input id="passwordInput" name="password" type="password" autocomplete="current-password" required />
+        </div>
+
+        <p class="form-error" id="authError" role="alert"></p>
+
+        <button class="primary-button" type="submit" id="authSubmit">
+          Войти
+        </button>
+      </form>
+    </section>
+  </main>
+
+  <main class="app-shell is-hidden" id="appShell">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-top">
+        <div class="brand-row">
+          <div>
+            <strong>BMSTUGPT</strong>
+            <span id="accountShort">Аккаунт</span>
+          </div>
+        </div>
+
+        <button class="new-chat-button" type="button" id="newChatButton">
+          <span aria-hidden="true">+</span>
+          Новый чат
+        </button>
+      </div>
+
+      <nav class="chat-list" id="chatList" aria-label="Список чатов"></nav>
+
+      <div class="sidebar-footer">
+        <button class="secondary-button" type="button" id="settingsButton">
+          <span aria-hidden="true">⚙</span>
+          Настройки
+        </button>
+        <button class="ghost-button" type="button" id="logoutButton">
+          Выйти
+        </button>
+      </div>
+    </aside>
+
+    <section class="workspace">
+      <header class="chat-header">
+        <button class="icon-button mobile-menu-button" type="button" id="mobileMenuButton"
+          aria-label="Открыть список чатов" title="Открыть список чатов">
+          ☰
+        </button>
+
+        <div class="model-picker" id="modelPicker">
+          <button class="model-button" type="button" id="modelButton" aria-haspopup="listbox" aria-expanded="false">
+            <span id="currentModelName">deepseek-v4-flash</span>
+            <span class="model-arrow" aria-hidden="true">⌄</span>
+          </button>
+          <div class="model-menu is-hidden" id="modelMenu" role="listbox"></div>
+        </div>
+      </header>
+
+      <div class="chat-body" id="chatBody" aria-live="polite"></div>
+
+      <form class="composer" id="messageForm">
+        <textarea id="messageInput" rows="1" placeholder="Сообщение" aria-label="Сообщение"></textarea>
+        <button class="send-button" type="submit" aria-label="Отправить" title="Отправить">
+          ↑
+        </button>
+      </form>
+    </section>
+  </main>
+
+  <div class="modal-backdrop is-hidden" id="settingsModal">
+    <section class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">Профиль</p>
+          <h2 id="settingsTitle">Настройки</h2>
+        </div>
+        <button class="icon-button" type="button" id="closeSettingsButton" aria-label="Закрыть настройки"
+          title="Закрыть">
+          ×
+        </button>
+      </div>
+
+      <form class="settings-form" id="settingsForm">
+        <div class="settings-grid">
+          <div class="field">
+            <label for="settingsName">Имя</label>
+            <input id="settingsName" name="name" type="text" />
+          </div>
+          <div class="field">
+            <label for="settingsLogin">Логин</label>
+            <input id="settingsLogin" name="login" type="text" disabled />
+          </div>
+          <div class="field">
+            <label for="settingsEmail">Почта</label>
+            <input id="settingsEmail" name="email" type="email" />
+          </div>
+          <div class="field">
+            <label for="defaultModelSelect">Модель по умолчанию</label>
+            <select id="defaultModelSelect" name="defaultModel"></select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="systemPromptInput">Системный промпт</label>
+          <textarea id="systemPromptInput" name="systemPrompt" rows="6"></textarea>
+        </div>
+
+        <div class="settings-actions">
+          <button class="secondary-button" type="button" id="cancelSettingsButton">
+            Отмена
+          </button>
+          <button class="primary-button compact" type="submit">Сохранить</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop is-hidden" id="deleteChatModal">
+    <section
+      class="delete-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="deleteChatTitle"
+    >
+      <div class="delete-icon" aria-hidden="true">×</div>
+      <h2 id="deleteChatTitle">Удалить чат?</h2>
+      <p class="delete-body">
+        Чат <span id="deleteChatName">Новый чат</span> будет удален из истории.
+      </p>
+      <div class="delete-actions">
+        <button class="secondary-button" type="button" id="cancelDeleteChatButton">
+          Отмена
+        </button>
+        <button class="danger-button" type="button" id="confirmDeleteChatButton">
+          Удалить
+        </button>
+      </div>
+    </section>
+  </div>
+
+  <div class="toast is-hidden" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="script.js"></script>
+</body>
+
+</html>
