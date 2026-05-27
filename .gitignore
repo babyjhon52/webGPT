@@ -8,4 +8,8 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Local database
+app.db
+
 Ð¢ÑÐµÐ±Ð¾Ð²Ð°Ð½Ð¸Ñ Ðº Ð¿ÑÐ¾ÐµÐºÑÑ.pdf

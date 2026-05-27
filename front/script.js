@@ -1,9 +1,10 @@
-const STORAGE_KEY = "owngpt-front-state";
+const SESSION_KEY = "bmstugpt-session";
 
-const models = [
+const fallbackModels = [
   { id: "qwen/qwen3.6-plus", name: "qwen3.6-plus" },
   { id: "deepseek/deepseek-v4-flash", name: "deepseek-v4-flash" },
 ];
+const models = fallbackModels.slice();
 
 const defaultSystemPrompt =
   "Ты полезный ассистент. Отвечай ясно, структурно и на русском языке.";
@@ -51,20 +52,25 @@ const elements = {
   toast: document.querySelector("#toast"),
 };
 
-const state = loadState();
+const state = loadSession();
 let authMode = "login";
 let toastTimer;
 let pendingDeleteChatId = null;
 
 init();
 
-function init() {
+async function init() {
   fillModelSelects();
-  normalizeStoredModels();
   bindEvents();
 
-  if (state.currentUserId && getCurrentUser()) {
-    showApp();
+  try {
+    await loadModels();
+  } catch {
+    showToast("Модели загружены из локального списка");
+  }
+
+  if (state.currentUser) {
+    await showApp();
   } else {
     showAuth();
   }
@@ -76,7 +82,7 @@ function bindEvents() {
   });
 
   elements.authForm.addEventListener("submit", handleAuthSubmit);
-  elements.newChatButton.addEventListener("click", createChat);
+  elements.newChatButton.addEventListener("click", () => createChat());
   elements.settingsButton.addEventListener("click", openSettings);
   elements.logoutButton.addEventListener("click", logout);
   elements.mobileMenuButton.addEventListener("click", () => {
@@ -88,18 +94,17 @@ function bindEvents() {
     toggleModelMenu();
   });
 
-  elements.modelMenu.addEventListener("click", (event) => {
+  elements.modelMenu.addEventListener("click", async (event) => {
     const option = event.target.closest("[data-model-id]");
     if (!option) return;
 
     const chat = getCurrentChat();
     if (!chat) return;
 
-    chat.model = option.dataset.modelId;
-    chat.updatedAt = new Date().toISOString();
-    saveState();
+    await updateChat(chat.id, {
+      model_openrouter_id: option.dataset.modelId,
+    });
     closeModelMenu();
-    renderApp();
   });
 
   elements.messageForm.addEventListener("submit", handleMessageSubmit);
@@ -132,9 +137,7 @@ function bindEvents() {
     const isMenuClick = elements.mobileMenuButton.contains(event.target);
     const isModelPickerClick = elements.modelPicker.contains(event.target);
 
-    if (!isModelPickerClick) {
-      closeModelMenu();
-    }
+    if (!isModelPickerClick) closeModelMenu();
 
     if (document.body.classList.contains("sidebar-open") && !isSidebarClick && !isMenuClick) {
       document.body.classList.remove("sidebar-open");
@@ -154,13 +157,14 @@ function setAuthMode(mode) {
 
   elements.emailInput.required = mode === "register";
   elements.nameInput.required = mode === "register";
+  elements.passwordInput.minLength = mode === "register" ? 6 : 0;
   elements.passwordInput.autocomplete =
     mode === "register" ? "new-password" : "current-password";
   elements.authSubmit.textContent = mode === "register" ? "Создать аккаунт" : "Войти";
   elements.authError.textContent = "";
 }
 
-function handleAuthSubmit(event) {
+async function handleAuthSubmit(event) {
   event.preventDefault();
   const login = elements.loginInput.value.trim();
   const password = elements.passwordInput.value.trim();
@@ -171,52 +175,64 @@ function handleAuthSubmit(event) {
   }
 
   if (authMode === "register") {
-    registerUser(login, password);
+    if (password.length < 6) {
+      setAuthError("Пароль должен быть не короче 6 символов.");
+      return;
+    }
+
+    await registerUser(login, password);
     return;
   }
 
-  loginUser(login, password);
+  await loginUser(login, password);
 }
 
-function registerUser(login, password) {
-  const existingUser = state.users.find((user) => user.login === login);
-  if (existingUser) {
-    setAuthError("Такой логин уже зарегистрирован.");
+async function registerUser(login, password) {
+  const email = elements.emailInput.value.trim();
+  if (!email) {
+    setAuthError("Введите почту.");
     return;
   }
 
-  const user = {
-    id: createId("user"),
-    login,
-    password,
-    name: elements.nameInput.value.trim() || login,
-    email: elements.emailInput.value.trim(),
-    createdAt: new Date().toISOString(),
-    defaultModel: models[0].id,
-    systemPrompt: defaultSystemPrompt,
-  };
+  try {
+    const data = await api("/auth/register", {
+      method: "POST",
+      body: {
+        username: login,
+        email,
+        password,
+      },
+    });
 
-  state.users.push(user);
-  state.currentUserId = user.id;
-  state.chats[user.id] = [];
-  createChat(false);
-  saveState();
-  showApp();
-  showToast("Аккаунт создан");
+    setCurrentUser(data.user);
+    state.defaultModel = models[0].id;
+    state.systemPrompt = defaultSystemPrompt;
+    await loadChats();
+    if (state.chats.length === 0) await createChat(false);
+    await showApp();
+    showToast("Аккаунт создан");
+  } catch (error) {
+    setAuthError(error.message);
+  }
 }
 
-function loginUser(login, password) {
-  const user = state.users.find((item) => item.login === login);
-  if (!user || user.password !== password) {
-    setAuthError("Неверный логин или пароль. Можно перейти к регистрации.");
-    return;
-  }
+async function loginUser(login, password) {
+  try {
+    const data = await api("/auth/login", {
+      method: "POST",
+      body: {
+        username: login,
+        password,
+      },
+    });
 
-  state.currentUserId = user.id;
-  ensureUserChats(user.id);
-  if (!state.activeChatId[user.id]) createChat(false);
-  saveState();
-  showApp();
+    setCurrentUser(data.user);
+    await loadChats();
+    if (state.chats.length === 0) await createChat(false);
+    await showApp();
+  } catch (error) {
+    setAuthError(error.message);
+  }
 }
 
 function setAuthError(message) {
@@ -231,28 +247,26 @@ function showAuth() {
   elements.loginInput.focus();
 }
 
-function showApp() {
+async function showApp() {
   elements.authPage.classList.add("is-hidden");
   elements.appShell.classList.remove("is-hidden");
-  ensureUserChats(state.currentUserId);
+  await loadChats();
   renderApp();
 }
 
 function renderApp() {
-  const user = getCurrentUser();
-  if (!user) {
+  if (!state.currentUser) {
     showAuth();
     return;
   }
 
-  elements.accountShort.textContent = user.name || user.login;
+  elements.accountShort.textContent = state.currentUser.username;
   renderChatList();
   renderActiveChat();
 }
 
 function renderChatList() {
-  const chats = getChats();
-  const activeId = getActiveChatId();
+  const chats = state.chats;
   elements.chatList.innerHTML = "";
 
   if (chats.length === 0) {
@@ -269,15 +283,15 @@ function renderChatList() {
     .forEach((chat) => {
       const item = document.createElement("article");
       item.className = "chat-item";
-      item.classList.toggle("is-active", chat.id === activeId);
+      item.classList.toggle("is-active", chat.id === state.activeChatId);
 
       const mainButton = document.createElement("button");
       mainButton.className = "chat-item-main";
       mainButton.type = "button";
       mainButton.addEventListener("click", () => {
-        state.activeChatId[state.currentUserId] = chat.id;
+        state.activeChatId = chat.id;
         document.body.classList.remove("sidebar-open");
-        saveState();
+        saveSession();
         renderApp();
       });
 
@@ -370,74 +384,72 @@ function handleMessageKeydown(event) {
   elements.messageForm.requestSubmit();
 }
 
-function handleMessageSubmit(event) {
+async function handleMessageSubmit(event) {
   event.preventDefault();
   const text = elements.messageInput.value.trim();
   if (!text) return;
 
   let chat = getCurrentChat();
   if (!chat) {
-    createChat(false);
-    chat = getCurrentChat();
+    chat = await createChat(false);
   }
+  if (!chat) return;
 
-  chat.messages.push(createMessage("user", text));
-
-  if (chat.title === "Новый чат") {
-    chat.title = text.length > 42 ? `${text.slice(0, 42)}...` : text;
-  }
-
-  chat.updatedAt = new Date().toISOString();
   elements.messageInput.value = "";
   resizeComposer();
-  renderApp();
 
-  window.setTimeout(() => {
-    chat.messages.push(createMessage("assistant", generateAssistantReply(text)));
-    chat.updatedAt = new Date().toISOString();
-    saveState();
+  try {
+    const data = await api(`/chats/${chat.id}/messages`, {
+      method: "POST",
+      body: {
+        user_id: state.currentUser.id,
+        content: text,
+      },
+    });
+
+    upsertChat(normalizeChat(data.chat));
+    state.activeChatId = data.chat.id;
+    saveSession();
     renderApp();
-  }, 320);
-
-  saveState();
+  } catch (error) {
+    setAuthError("");
+    showToast(error.message);
+  }
 }
 
-function generateAssistantReply() {
-  return "Здесь будет ответ модели.";
-}
+async function createChat(shouldRender = true) {
+  if (!state.currentUser) return null;
 
-function createChat(shouldRender = true) {
-  const user = getCurrentUser();
-  if (!user) return;
+  try {
+    const chat = normalizeChat(
+      await api("/chats", {
+        method: "POST",
+        body: {
+          user_id: state.currentUser.id,
+          model_openrouter_id: state.defaultModel,
+          system_prompt: state.systemPrompt,
+        },
+      })
+    );
 
-  ensureUserChats(user.id);
+    upsertChat(chat);
+    state.activeChatId = chat.id;
+    saveSession();
 
-  const chat = {
-    id: createId("chat"),
-    title: "Новый чат",
-    model: normalizeModelId(user.defaultModel),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    messages: [
-      createMessage(
-        "assistant",
-        `Привет, ${user.name || user.login}! Я готов к диалогу.`
-      ),
-    ],
-  };
+    if (shouldRender) {
+      renderApp();
+      elements.messageInput.focus();
+    }
 
-  state.chats[user.id].push(chat);
-  state.activeChatId[user.id] = chat.id;
-  saveState();
-
-  if (shouldRender) {
-    renderApp();
-    elements.messageInput.focus();
+    return chat;
+  } catch (error) {
+    showToast(error.message);
+    return null;
   }
 }
 
 function deleteChat(chatId) {
-  const chat = getChats().find((item) => item.id === chatId);
+  const chat = state.chats.find((item) => item.id === chatId);
   if (!chat) return;
 
   pendingDeleteChatId = chatId;
@@ -451,32 +463,38 @@ function closeDeleteChatDialog() {
   elements.deleteChatModal.classList.add("is-hidden");
 }
 
-function confirmDeleteChat() {
-  if (!pendingDeleteChatId) return;
+async function confirmDeleteChat() {
+  if (!pendingDeleteChatId || !state.currentUser) return;
 
-  const userId = state.currentUserId;
   const chatId = pendingDeleteChatId;
-  state.chats[userId] = getChats().filter((chat) => chat.id !== chatId);
+  try {
+    await api(`/chats/${chatId}?user_id=${encodeURIComponent(state.currentUser.id)}`, {
+      method: "DELETE",
+    });
 
-  if (state.activeChatId[userId] === chatId) {
-    state.activeChatId[userId] = state.chats[userId][0]?.id || null;
+    state.chats = state.chats.filter((chat) => chat.id !== chatId);
+    if (state.activeChatId === chatId) {
+      state.activeChatId = state.chats[0]?.id || null;
+    }
+
+    closeDeleteChatDialog();
+    saveSession();
+    renderApp();
+    showToast("Чат удален");
+  } catch (error) {
+    closeDeleteChatDialog();
+    showToast(error.message);
   }
-
-  closeDeleteChatDialog();
-  saveState();
-  renderApp();
-  showToast("Чат удален");
 }
 
 function openSettings() {
-  const user = getCurrentUser();
-  if (!user) return;
+  if (!state.currentUser) return;
 
-  elements.settingsName.value = user.name || "";
-  elements.settingsLogin.value = user.login;
-  elements.settingsEmail.value = user.email || "";
-  elements.defaultModelSelect.value = normalizeModelId(user.defaultModel);
-  elements.systemPromptInput.value = user.systemPrompt || defaultSystemPrompt;
+  elements.settingsName.value = state.currentUser.username;
+  elements.settingsLogin.value = state.currentUser.username;
+  elements.settingsEmail.value = state.currentUser.email;
+  elements.defaultModelSelect.value = normalizeModelId(state.defaultModel);
+  elements.systemPromptInput.value = state.systemPrompt || defaultSystemPrompt;
   elements.settingsModal.classList.remove("is-hidden");
   elements.settingsName.focus();
 }
@@ -485,24 +503,32 @@ function closeSettings() {
   elements.settingsModal.classList.add("is-hidden");
 }
 
-function handleSettingsSubmit(event) {
+async function handleSettingsSubmit(event) {
   event.preventDefault();
-  const user = getCurrentUser();
-  if (!user) return;
+  if (!state.currentUser) return;
 
-  user.name = elements.settingsName.value.trim() || user.login;
-  user.email = elements.settingsEmail.value.trim();
-  user.defaultModel = elements.defaultModelSelect.value;
-  user.systemPrompt = elements.systemPromptInput.value.trim() || defaultSystemPrompt;
-  saveState();
+  state.defaultModel = normalizeModelId(elements.defaultModelSelect.value);
+  state.systemPrompt = elements.systemPromptInput.value.trim() || defaultSystemPrompt;
+
+  const chat = getCurrentChat();
+  if (chat) {
+    await updateChat(chat.id, {
+      model_openrouter_id: state.defaultModel,
+      system_prompt: state.systemPrompt,
+    });
+  }
+
+  saveSession();
   closeSettings();
   renderApp();
   showToast("Настройки сохранены");
 }
 
 function logout() {
-  state.currentUserId = null;
-  saveState();
+  state.currentUser = null;
+  state.chats = [];
+  state.activeChatId = null;
+  saveSession();
   showAuth();
 }
 
@@ -549,35 +575,135 @@ function updateModelPicker(modelId) {
   });
 }
 
+async function loadModels() {
+  const modelData = await api("/models");
+  models.splice(
+    0,
+    models.length,
+    ...modelData.map((model) => ({
+      id: model.openrouter_id,
+      name: model.display_name,
+    }))
+  );
+  state.defaultModel = normalizeModelId(state.defaultModel);
+  fillModelSelects();
+  saveSession();
+}
+
+async function loadChats() {
+  if (!state.currentUser) return;
+
+  const chats = await api(`/chats?user_id=${encodeURIComponent(state.currentUser.id)}`);
+  state.chats = chats.map(normalizeChat);
+
+  if (!state.activeChatId || !state.chats.some((chat) => chat.id === state.activeChatId)) {
+    state.activeChatId = state.chats[0]?.id || null;
+  }
+
+  saveSession();
+}
+
+async function updateChat(chatId, updates) {
+  if (!state.currentUser) return null;
+
+  try {
+    const chat = normalizeChat(
+      await api(`/chats/${chatId}`, {
+        method: "PATCH",
+        body: {
+          user_id: state.currentUser.id,
+          ...updates,
+        },
+      })
+    );
+    upsertChat(chat);
+    saveSession();
+    renderApp();
+    return chat;
+  } catch (error) {
+    showToast(error.message);
+    return null;
+  }
+}
+
+async function api(path, options = {}) {
+  const fetchOptions = {
+    method: options.method || "GET",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  };
+
+  if (options.body !== undefined) {
+    fetchOptions.body = JSON.stringify(options.body);
+  }
+
+  const response = await fetch(`/api/v1${path}`, fetchOptions);
+  const data = await readApiJson(response);
+
+  if (!response.ok) {
+    throw new Error(getApiErrorMessage(data, "Ошибка запроса."));
+  }
+
+  return data;
+}
+
+async function readApiJson(response) {
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
+}
+
+function getApiErrorMessage(data, fallback) {
+  if (typeof data.detail === "string") return data.detail;
+
+  if (Array.isArray(data.detail)) {
+    return data.detail
+      .map((item) => item.msg)
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  return fallback;
+}
+
+function normalizeChat(chat) {
+  return {
+    id: chat.id,
+    userId: chat.user_id,
+    title: chat.title,
+    model: normalizeModelId(chat.model_openrouter_id),
+    systemPrompt: chat.system_prompt || "",
+    createdAt: chat.created_at,
+    updatedAt: chat.updated_at,
+    messages: (chat.messages || []).map((message) => ({
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      createdAt: message.created_at,
+    })),
+  };
+}
+
+function upsertChat(chat) {
+  const index = state.chats.findIndex((item) => item.id === chat.id);
+  if (index === -1) {
+    state.chats.push(chat);
+  } else {
+    state.chats[index] = chat;
+  }
+}
+
 function resizeComposer() {
   elements.messageInput.style.height = "auto";
   elements.messageInput.style.height = `${elements.messageInput.scrollHeight}px`;
 }
 
-function getCurrentUser() {
-  return state.users.find((user) => user.id === state.currentUserId);
-}
-
-function getChats() {
-  if (!state.currentUserId) return [];
-  ensureUserChats(state.currentUserId);
-  return state.chats[state.currentUserId];
-}
-
 function getCurrentChat() {
-  const activeId = getActiveChatId();
-  return getChats().find((chat) => chat.id === activeId);
-}
-
-function getActiveChatId() {
-  return state.activeChatId[state.currentUserId];
-}
-
-function ensureUserChats(userId) {
-  if (!state.chats[userId]) state.chats[userId] = [];
-  if (!state.activeChatId[userId] && state.chats[userId][0]) {
-    state.activeChatId[userId] = state.chats[userId][0].id;
-  }
+  return state.chats.find((chat) => chat.id === state.activeChatId);
 }
 
 function getChatPreview(chat) {
@@ -603,31 +729,14 @@ function normalizeModelId(modelId) {
   return models.some((model) => model.id === modelId) ? modelId : models[0].id;
 }
 
-function normalizeStoredModels() {
-  state.users.forEach((user) => {
-    user.defaultModel = normalizeModelId(user.defaultModel);
-  });
-
-  Object.values(state.chats).forEach((chats) => {
-    chats.forEach((chat) => {
-      chat.model = normalizeModelId(chat.model);
-    });
-  });
-
-  saveState();
-}
-
-function createMessage(role, content) {
-  return {
-    id: createId("msg"),
-    role,
-    content,
-    createdAt: new Date().toISOString(),
+function setCurrentUser(user) {
+  state.currentUser = {
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    createdAt: user.created_at,
   };
-}
-
-function createId(prefix) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  saveSession();
 }
 
 function showToast(message) {
@@ -639,22 +748,23 @@ function showToast(message) {
   }, 2200);
 }
 
-function loadState() {
+function loadSession() {
   const fallback = {
-    users: [],
-    chats: {},
-    activeChatId: {},
-    currentUserId: null,
+    currentUser: null,
+    chats: [],
+    activeChatId: null,
+    defaultModel: fallbackModels[0].id,
+    systemPrompt: defaultSystemPrompt,
   };
 
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(SESSION_KEY);
     return stored ? { ...fallback, ...JSON.parse(stored) } : fallback;
   } catch {
     return fallback;
   }
 }
 
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+function saveSession() {
+  localStorage.setItem(SESSION_KEY, JSON.stringify(state));
 }
