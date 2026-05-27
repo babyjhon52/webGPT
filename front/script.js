@@ -44,6 +44,7 @@ const elements = {
   settingsLogin: document.querySelector("#settingsLogin"),
   settingsEmail: document.querySelector("#settingsEmail"),
   defaultModelSelect: document.querySelector("#defaultModelSelect"),
+  themeSelect: document.querySelector("#themeSelect"),
   systemPromptInput: document.querySelector("#systemPromptInput"),
   deleteChatModal: document.querySelector("#deleteChatModal"),
   deleteChatName: document.querySelector("#deleteChatName"),
@@ -60,6 +61,7 @@ let pendingDeleteChatId = null;
 init();
 
 async function init() {
+  applyTheme(state.theme);
   fillModelSelects();
   bindEvents();
 
@@ -494,6 +496,7 @@ function openSettings() {
   elements.settingsLogin.value = state.currentUser.username;
   elements.settingsEmail.value = state.currentUser.email;
   elements.defaultModelSelect.value = normalizeModelId(state.defaultModel);
+  elements.themeSelect.value = normalizeTheme(state.theme);
   elements.systemPromptInput.value = state.systemPrompt || defaultSystemPrompt;
   elements.settingsModal.classList.remove("is-hidden");
   elements.settingsName.focus();
@@ -509,6 +512,8 @@ async function handleSettingsSubmit(event) {
 
   state.defaultModel = normalizeModelId(elements.defaultModelSelect.value);
   state.systemPrompt = elements.systemPromptInput.value.trim() || defaultSystemPrompt;
+  state.theme = normalizeTheme(elements.themeSelect.value);
+  applyTheme(state.theme);
 
   const chat = getCurrentChat();
   if (chat) {
@@ -729,6 +734,14 @@ function normalizeModelId(modelId) {
   return models.some((model) => model.id === modelId) ? modelId : models[0].id;
 }
 
+function normalizeTheme(theme) {
+  return theme === "light" ? "light" : "dark";
+}
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = normalizeTheme(theme);
+}
+
 function setCurrentUser(user) {
   state.currentUser = {
     id: user.id,
@@ -755,11 +768,14 @@ function loadSession() {
     activeChatId: null,
     defaultModel: fallbackModels[0].id,
     systemPrompt: defaultSystemPrompt,
+    theme: "dark",
   };
 
   try {
     const stored = localStorage.getItem(SESSION_KEY);
-    return stored ? { ...fallback, ...JSON.parse(stored) } : fallback;
+    const session = stored ? { ...fallback, ...JSON.parse(stored) } : fallback;
+    session.theme = normalizeTheme(session.theme);
+    return session;
   } catch {
     return fallback;
   }

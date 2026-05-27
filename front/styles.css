@@ -10,16 +10,78 @@
   --muted: #9a9a9a;
   --accent: #f4f4f4;
   --accent-strong: #d9d9d9;
+  --accent-text: #0b0f0d;
   --danger: #ff8585;
+  --danger-border: rgba(255, 133, 133, 0.35);
+  --danger-bg: rgba(255, 133, 133, 0.12);
+  --danger-bg-strong: rgba(255, 133, 133, 0.2);
+  --danger-text: #ffd5d5;
   --glow: rgba(255, 255, 255, 0.08);
   --shadow: 0 24px 64px rgba(0, 0, 0, 0.42);
   --soft-glow: 0 0 28px rgba(255, 255, 255, 0.055);
+  --focus-ring: rgba(255, 255, 255, 0.14);
+  --hover-bg: rgba(255, 255, 255, 0.08);
+  --chat-item-bg: #101010;
+  --chat-item-active: #171717;
+  --chat-item-hover: #151515;
+  --active-border: rgba(255, 255, 255, 0.28);
+  --hover-border: rgba(255, 255, 255, 0.2);
+  --header-bg: rgba(11, 11, 11, 0.96);
+  --menu-bg: #101010;
+  --model-bg: #151515;
+  --icon-bg: #0b0b0b;
+  --modal-backdrop: rgba(0, 0, 0, 0.66);
+  --mobile-backdrop: rgba(0, 0, 0, 0.5);
+  --sidebar-shadow: 10px 0 36px rgba(255, 255, 255, 0.025);
+  --subtle-card-shadow: 0 0 20px rgba(255, 255, 255, 0.025);
+  --user-message-bg: rgba(255, 255, 255, 0.08);
+  --user-message-border: rgba(255, 255, 255, 0.22);
   --radius-lg: 8px;
   --radius-md: 8px;
   --radius-sm: 12px;
   --font:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f4f1;
+  --surface: #ffffff;
+  --surface-soft: #f0f0eb;
+  --surface-raised: #e5e5dd;
+  --line: #d4d4ca;
+  --line-soft: #e4e4dc;
+  --text: #171717;
+  --muted: #686861;
+  --accent: #181818;
+  --accent-strong: #333333;
+  --accent-text: #ffffff;
+  --danger: #b82525;
+  --danger-border: rgba(184, 37, 37, 0.3);
+  --danger-bg: rgba(184, 37, 37, 0.08);
+  --danger-bg-strong: rgba(184, 37, 37, 0.14);
+  --danger-text: #9d1f1f;
+  --glow: rgba(24, 24, 24, 0.06);
+  --shadow: 0 24px 64px rgba(32, 32, 28, 0.16);
+  --soft-glow: 0 0 28px rgba(24, 24, 24, 0.06);
+  --focus-ring: rgba(24, 24, 24, 0.14);
+  --hover-bg: rgba(24, 24, 24, 0.06);
+  --chat-item-bg: #fbfbf8;
+  --chat-item-active: #eeeee8;
+  --chat-item-hover: #f2f2ed;
+  --active-border: rgba(24, 24, 24, 0.2);
+  --hover-border: rgba(24, 24, 24, 0.16);
+  --header-bg: rgba(255, 255, 255, 0.92);
+  --menu-bg: #ffffff;
+  --model-bg: #f5f5f0;
+  --icon-bg: #f6f6f2;
+  --modal-backdrop: rgba(24, 24, 24, 0.34);
+  --mobile-backdrop: rgba(24, 24, 24, 0.28);
+  --sidebar-shadow: 10px 0 36px rgba(32, 32, 28, 0.08);
+  --subtle-card-shadow: 0 0 20px rgba(32, 32, 28, 0.07);
+  --user-message-bg: rgba(24, 24, 24, 0.06);
+  --user-message-border: rgba(24, 24, 24, 0.16);
 }
 
 * {
@@ -180,7 +242,7 @@ select:focus,
 textarea:focus,
 button:focus-visible {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.14);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .form-error {
@@ -215,7 +277,7 @@ button:focus-visible {
   padding: 0 18px;
   border-color: transparent;
   background: var(--accent);
-  color: #0b0f0d;
+  color: var(--accent-text);
   font-weight: 800;
 }
 
@@ -226,9 +288,9 @@ button:focus-visible {
 .danger-button {
   min-height: 42px;
   padding: 0 18px;
-  border-color: rgba(255, 133, 133, 0.35);
-  background: rgba(255, 133, 133, 0.12);
-  color: #ffd5d5;
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger-text);
   font-weight: 800;
 }
 
@@ -239,14 +301,14 @@ button:focus-visible {
 .icon-button:hover,
 .delete-chat-button:hover {
   border-color: var(--accent);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--hover-bg);
   color: var(--text);
 }
 
 .danger-button:hover {
   border-color: var(--danger);
-  background: rgba(255, 133, 133, 0.2);
-  color: #ffffff;
+  background: var(--danger-bg-strong);
+  color: var(--danger);
 }
 
 .primary-button:active,
@@ -273,7 +335,7 @@ button:focus-visible {
   grid-template-rows: auto minmax(0, 1fr) auto;
   border-right: 1px solid var(--line-soft);
   background: var(--surface);
-  box-shadow: 10px 0 36px rgba(255, 255, 255, 0.025);
+  box-shadow: var(--sidebar-shadow);
 }
 
 .sidebar-top,
@@ -341,7 +403,7 @@ button:focus-visible {
   padding: 11px;
   border: 1px solid var(--line-soft);
   border-radius: 14px;
-  background: #101010;
+  background: var(--chat-item-bg);
   transition:
     border-color 0.18s ease,
     background 0.18s ease,
@@ -349,15 +411,15 @@ button:focus-visible {
 }
 
 .chat-item.is-active {
-  border-color: rgba(255, 255, 255, 0.28);
-  background: #171717;
-  box-shadow: 0 0 24px rgba(255, 255, 255, 0.06);
+  border-color: var(--active-border);
+  background: var(--chat-item-active);
+  box-shadow: 0 0 24px var(--glow);
 }
 
 .chat-item:hover {
-  border-color: rgba(255, 255, 255, 0.2);
-  background: #151515;
-  box-shadow: 0 0 20px rgba(255, 255, 255, 0.04);
+  border-color: var(--hover-border);
+  background: var(--chat-item-hover);
+  box-shadow: 0 0 20px var(--glow);
 }
 
 .chat-item-main {
@@ -391,7 +453,7 @@ button:focus-visible {
 
 .chat-item-meta {
   margin-top: 8px;
-  color: #c7c7c7;
+  color: var(--muted);
   font-size: 11px;
   font-weight: 700;
 }
@@ -404,12 +466,12 @@ button:focus-visible {
   place-items: center;
   padding: 0;
   color: var(--muted);
-  background: #0b0b0b;
+  background: var(--icon-bg);
 }
 
 .delete-chat-button:hover {
   border-color: var(--danger);
-  background: rgba(255, 133, 133, 0.08);
+  background: var(--danger-bg);
   color: var(--danger);
 }
 
@@ -434,9 +496,9 @@ button:focus-visible {
   align-items: center;
   padding: 12px 20px;
   border-bottom: 1px solid var(--line-soft);
-  background: rgba(11, 11, 11, 0.96);
+  background: var(--header-bg);
   backdrop-filter: blur(14px);
-  box-shadow: 0 1px 24px rgba(255, 255, 255, 0.035);
+  box-shadow: 0 1px 24px var(--glow);
 }
 
 .mobile-menu-button {
@@ -460,11 +522,11 @@ button:focus-visible {
   padding: 0 11px 0 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #151515;
+  background: var(--model-bg);
   color: var(--text);
   font-size: 14px;
   font-weight: 800;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02), 0 0 26px rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 0 0 1px var(--glow), 0 0 26px var(--glow);
   transition:
     border-color 0.18s ease,
     box-shadow 0.18s ease,
@@ -474,7 +536,7 @@ button:focus-visible {
 .model-button:hover,
 .model-button[aria-expanded="true"] {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08), 0 0 30px rgba(255, 255, 255, 0.055);
+  box-shadow: 0 0 0 3px var(--focus-ring), 0 0 30px var(--glow);
 }
 
 .model-arrow {
@@ -493,8 +555,8 @@ button:focus-visible {
   padding: 6px;
   border: 1px solid var(--line);
   border-radius: 18px;
-  background: #101010;
-  box-shadow: var(--shadow), 0 0 30px rgba(255, 255, 255, 0.055);
+  background: var(--menu-bg);
+  box-shadow: var(--shadow), 0 0 30px var(--glow);
 }
 
 .model-option {
@@ -512,7 +574,7 @@ button:focus-visible {
 
 .model-option:hover,
 .model-option.is-selected {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--hover-bg);
   color: var(--text);
 }
 
@@ -544,12 +606,12 @@ button:focus-visible {
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-md);
   background: var(--surface);
-  box-shadow: 0 0 20px rgba(255, 255, 255, 0.025);
+  box-shadow: var(--subtle-card-shadow);
 }
 
 .message.user .message-bubble {
-  border-color: rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--user-message-border);
+  background: var(--user-message-bg);
 }
 
 .message-meta {
@@ -593,7 +655,7 @@ button:focus-visible {
   border: 1px solid var(--line-soft);
   border-radius: 24px;
   background: var(--surface);
-  box-shadow: 0 0 28px rgba(255, 255, 255, 0.035);
+  box-shadow: 0 0 28px var(--glow);
 }
 
 .composer textarea {
@@ -624,7 +686,7 @@ button:focus-visible {
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(0, 0, 0, 0.66);
+  background: var(--modal-backdrop);
 }
 
 .settings-panel {
@@ -647,10 +709,10 @@ button:focus-visible {
   padding: 26px;
   border: 1px solid var(--line);
   border-radius: 18px;
-  background: #101010;
+  background: var(--menu-bg);
   color: var(--text);
   text-align: center;
-  box-shadow: var(--shadow), 0 0 34px rgba(255, 255, 255, 0.055);
+  box-shadow: var(--shadow), 0 0 34px var(--glow);
 }
 
 .delete-icon {
@@ -658,10 +720,10 @@ button:focus-visible {
   height: 46px;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(255, 133, 133, 0.35);
+  border: 1px solid var(--danger-border);
   border-radius: 50%;
-  background: rgba(255, 133, 133, 0.1);
-  color: #ffd5d5;
+  background: var(--danger-bg);
+  color: var(--danger-text);
   font-size: 28px;
   line-height: 1;
 }
@@ -762,7 +824,7 @@ button:focus-visible {
     position: fixed;
     inset: 0;
     z-index: 14;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--mobile-backdrop);
   }
 
   body.sidebar-open .sidebar {

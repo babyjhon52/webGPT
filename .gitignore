@@ -1,8 +1,10 @@
 # Python-generated files
 __pycache__/
 *.py[oc]
+.coverage
 build/
 dist/
+htmlcov/
 wheels/
 *.egg-info
 

@@ -8,6 +8,17 @@ dependencies = [
     "dotenv>=0.9.9",
     "fastapi>=0.136.3",
     "openai>=2.38.0",
+    "pytest>=9.0.3",
     "sqlmodel>=0.0.38",
     "uvicorn>=0.48.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=main --cov=db --cov-report=term-missing --cov-fail-under=75"
