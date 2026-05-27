@@ -331,8 +331,10 @@ button:focus-visible {
 
 .sidebar {
   min-height: 100vh;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  max-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
   border-right: 1px solid var(--line-soft);
   background: var(--surface);
   box-shadow: var(--sidebar-shadow);
@@ -389,8 +391,7 @@ button:focus-visible {
   display: grid;
   align-content: start;
   gap: 10px;
-  overflow-y: auto;
-  padding: 0 12px 14px;
+  padding: 0 12px 0;
 }
 
 .chat-item {
@@ -478,6 +479,7 @@ button:focus-visible {
 .sidebar-footer {
   display: grid;
   gap: 8px;
+  margin-top: 10px;
   border-top: 1px solid var(--line-soft);
 }
 

@@ -26,6 +26,8 @@ const elements = {
   chatList: document.querySelector("#chatList"),
   chatBody: document.querySelector("#chatBody"),
   newChatButton: document.querySelector("#newChatButton"),
+  themeButton: document.querySelector("#themeButton"),
+  themeButtonText: document.querySelector("#themeButtonText"),
   settingsButton: document.querySelector("#settingsButton"),
   logoutButton: document.querySelector("#logoutButton"),
   mobileMenuButton: document.querySelector("#mobileMenuButton"),
@@ -44,7 +46,6 @@ const elements = {
   settingsLogin: document.querySelector("#settingsLogin"),
   settingsEmail: document.querySelector("#settingsEmail"),
   defaultModelSelect: document.querySelector("#defaultModelSelect"),
-  themeSelect: document.querySelector("#themeSelect"),
   systemPromptInput: document.querySelector("#systemPromptInput"),
   deleteChatModal: document.querySelector("#deleteChatModal"),
   deleteChatName: document.querySelector("#deleteChatName"),
@@ -85,6 +86,7 @@ function bindEvents() {
 
   elements.authForm.addEventListener("submit", handleAuthSubmit);
   elements.newChatButton.addEventListener("click", () => createChat());
+  elements.themeButton.addEventListener("click", toggleTheme);
   elements.settingsButton.addEventListener("click", openSettings);
   elements.logoutButton.addEventListener("click", logout);
   elements.mobileMenuButton.addEventListener("click", () => {
@@ -496,7 +498,6 @@ function openSettings() {
   elements.settingsLogin.value = state.currentUser.username;
   elements.settingsEmail.value = state.currentUser.email;
   elements.defaultModelSelect.value = normalizeModelId(state.defaultModel);
-  elements.themeSelect.value = normalizeTheme(state.theme);
   elements.systemPromptInput.value = state.systemPrompt || defaultSystemPrompt;
   elements.settingsModal.classList.remove("is-hidden");
   elements.settingsName.focus();
@@ -512,8 +513,6 @@ async function handleSettingsSubmit(event) {
 
   state.defaultModel = normalizeModelId(elements.defaultModelSelect.value);
   state.systemPrompt = elements.systemPromptInput.value.trim() || defaultSystemPrompt;
-  state.theme = normalizeTheme(elements.themeSelect.value);
-  applyTheme(state.theme);
 
   const chat = getCurrentChat();
   if (chat) {
@@ -739,7 +738,24 @@ function normalizeTheme(theme) {
 }
 
 function applyTheme(theme) {
-  document.documentElement.dataset.theme = normalizeTheme(theme);
+  const normalizedTheme = normalizeTheme(theme);
+  document.documentElement.dataset.theme = normalizedTheme;
+  document.body.dataset.theme = normalizedTheme;
+
+  if (elements.themeButtonText) {
+    elements.themeButtonText.textContent =
+      normalizedTheme === "light" ? "Темная тема" : "Светлая тема";
+  }
+}
+
+function setTheme(theme) {
+  state.theme = normalizeTheme(theme);
+  applyTheme(state.theme);
+  saveSession();
+}
+
+function toggleTheme() {
+  setTheme(state.theme === "light" ? "dark" : "light");
 }
 
 function setCurrentUser(user) {

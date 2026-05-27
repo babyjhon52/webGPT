@@ -72,6 +72,9 @@
       <nav class="chat-list" id="chatList" aria-label="Список чатов"></nav>
 
       <div class="sidebar-footer">
+        <button class="secondary-button" type="button" id="themeButton">
+          <span id="themeButtonText">Светлая тема</span>
+        </button>
         <button class="secondary-button" type="button" id="settingsButton">
           <span aria-hidden="true">⚙</span>
           Настройки
@@ -139,13 +142,6 @@
           <div class="field">
             <label for="defaultModelSelect">Модель по умолчанию</label>
             <select id="defaultModelSelect" name="defaultModel"></select>
-          </div>
-          <div class="field">
-            <label for="themeSelect">Тема</label>
-            <select id="themeSelect" name="theme">
-              <option value="dark">Темная</option>
-              <option value="light">Светлая</option>
-            </select>
           </div>
         </div>
 
