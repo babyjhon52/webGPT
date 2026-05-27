@@ -361,6 +361,7 @@ function renderActiveChat() {
 function createMessageElement(message, modelId) {
   const wrapper = document.createElement("article");
   wrapper.className = `message ${message.role}`;
+  wrapper.classList.toggle("is-pending", Boolean(message.pending));
 
   const bubble = document.createElement("div");
   bubble.className = "message-bubble";
@@ -372,11 +373,18 @@ function createMessageElement(message, modelId) {
     bubble.append(meta);
   }
 
-  const text = document.createElement("p");
-  text.className = "message-text";
-  text.textContent = message.content;
+  if (message.pending) {
+    const loader = document.createElement("div");
+    loader.className = "message-loader";
+    loader.setAttribute("aria-label", "Ожидание ответа");
+    bubble.append(loader);
+  } else {
+    const text = document.createElement("p");
+    text.className = "message-text";
+    text.textContent = message.content;
+    bubble.append(text);
+  }
 
-  bubble.append(text);
   wrapper.append(bubble);
   return wrapper;
 }
@@ -401,6 +409,8 @@ async function handleMessageSubmit(event) {
 
   elements.messageInput.value = "";
   resizeComposer();
+  addPendingMessages(chat, text);
+  renderApp();
 
   try {
     const data = await api(`/chats/${chat.id}/messages`, {
@@ -416,9 +426,47 @@ async function handleMessageSubmit(event) {
     saveSession();
     renderApp();
   } catch (error) {
+    removePendingAssistantMessage(chat.id);
+    renderApp();
     setAuthError("");
     showToast(error.message);
   }
+}
+
+function addPendingMessages(chat, text) {
+  const now = new Date().toISOString();
+
+  if (chat.title === "Новый чат") {
+    chat.title = text.length > 42 ? `${text.slice(0, 42)}...` : text;
+  }
+
+  chat.updatedAt = now;
+  chat.messages.push({
+    id: createPendingId("user"),
+    role: "user",
+    content: text,
+    createdAt: now,
+  });
+  chat.messages.push({
+    id: createPendingId("assistant"),
+    role: "assistant",
+    content: "",
+    createdAt: now,
+    pending: true,
+  });
+}
+
+function removePendingAssistantMessage(chatId) {
+  const chat = state.chats.find((item) => item.id === chatId);
+  if (!chat) return;
+
+  chat.messages = chat.messages.filter(
+    (message) => !(message.role === "assistant" && message.pending)
+  );
+}
+
+function createPendingId(role) {
+  return `pending-${role}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 async function createChat(shouldRender = true) {
@@ -712,6 +760,7 @@ function getCurrentChat() {
 
 function getChatPreview(chat) {
   const lastMessage = chat.messages[chat.messages.length - 1];
+  if (lastMessage?.pending) return "Ожидание ответа...";
   return lastMessage?.content || "Пустой чат";
 }
 

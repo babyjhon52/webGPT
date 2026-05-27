@@ -616,6 +616,20 @@ button:focus-visible {
   background: var(--user-message-bg);
 }
 
+.message.is-pending .message-bubble {
+  width: auto;
+  min-width: 54px;
+}
+
+.message-loader {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: loader-spin 0.78s linear infinite;
+}
+
 .message-meta {
   margin-bottom: 6px;
   color: var(--muted);
@@ -628,6 +642,12 @@ button:focus-visible {
   line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+@keyframes loader-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .empty-state {
