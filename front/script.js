@@ -72,7 +72,7 @@ async function init() {
     showToast("Модели загружены из локального списка");
   }
 
-  if (state.currentUser) {
+  if (await restoreSession()) {
     await showApp();
   } else {
     showAuth();
@@ -236,6 +236,17 @@ async function loginUser(login, password) {
     await showApp();
   } catch (error) {
     setAuthError(error.message);
+  }
+}
+
+async function restoreSession() {
+  try {
+    const user = await api("/auth/me");
+    setCurrentUser(user);
+    return true;
+  } catch {
+    clearSessionState();
+    return false;
   }
 }
 
@@ -416,7 +427,6 @@ async function handleMessageSubmit(event) {
     const data = await api(`/chats/${chat.id}/messages`, {
       method: "POST",
       body: {
-        user_id: state.currentUser.id,
         content: text,
       },
     });
@@ -477,7 +487,6 @@ async function createChat(shouldRender = true) {
       await api("/chats", {
         method: "POST",
         body: {
-          user_id: state.currentUser.id,
           model_openrouter_id: state.defaultModel,
           system_prompt: state.systemPrompt,
         },
@@ -520,7 +529,7 @@ async function confirmDeleteChat() {
 
   const chatId = pendingDeleteChatId;
   try {
-    await api(`/chats/${chatId}?user_id=${encodeURIComponent(state.currentUser.id)}`, {
+    await api(`/chats/${chatId}`, {
       method: "DELETE",
     });
 
@@ -576,12 +585,22 @@ async function handleSettingsSubmit(event) {
   showToast("Настройки сохранены");
 }
 
-function logout() {
+async function logout() {
+  try {
+    await api("/auth/logout", { method: "POST" });
+  } catch {
+    // Local logout should still work if the session is already gone.
+  }
+
+  clearSessionState();
+  showAuth();
+}
+
+function clearSessionState() {
   state.currentUser = null;
   state.chats = [];
   state.activeChatId = null;
   saveSession();
-  showAuth();
 }
 
 function fillModelSelects() {
@@ -645,7 +664,7 @@ async function loadModels() {
 async function loadChats() {
   if (!state.currentUser) return;
 
-  const chats = await api(`/chats?user_id=${encodeURIComponent(state.currentUser.id)}`);
+  const chats = await api("/chats");
   state.chats = chats.map(normalizeChat);
 
   if (!state.activeChatId || !state.chats.some((chat) => chat.id === state.activeChatId)) {
@@ -663,7 +682,6 @@ async function updateChat(chatId, updates) {
       await api(`/chats/${chatId}`, {
         method: "PATCH",
         body: {
-          user_id: state.currentUser.id,
           ...updates,
         },
       })
@@ -681,6 +699,7 @@ async function updateChat(chatId, updates) {
 async function api(path, options = {}) {
   const fetchOptions = {
     method: options.method || "GET",
+    credentials: "same-origin",
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {}),

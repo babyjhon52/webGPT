@@ -50,6 +50,7 @@ def register_user(client: TestClient, username: str = "ilya") -> dict:
         },
     )
     assert response.status_code == 200
+    assert main.SESSION_COOKIE_NAME in client.cookies
     return response.json()["user"]
 
 
@@ -78,6 +79,10 @@ def test_register_login_and_security(test_app):
     assert "password" not in user
     assert "password_hash" not in user
 
+    me_response = client.get("/api/v1/auth/me")
+    assert me_response.status_code == 200
+    assert me_response.json()["id"] == user["id"]
+
     duplicate = client.post(
         "/api/v1/auth/register",
         json={
@@ -101,6 +106,10 @@ def test_register_login_and_security(test_app):
     assert good_login.status_code == 200
     assert good_login.json()["user"]["id"] == user["id"]
 
+    logout_response = client.post("/api/v1/auth/logout")
+    assert logout_response.status_code == 200
+    assert client.get("/api/v1/auth/me").status_code == 401
+
     password_hash = hash_password("secret123")
     assert password_hash != "secret123"
     assert verify_password("secret123", password_hash)
@@ -110,12 +119,11 @@ def test_register_login_and_security(test_app):
 
 def test_chat_crud_and_message_flow(test_app, monkeypatch):
     client, _ = test_app
-    user = register_user(client)
+    register_user(client)
 
     create_response = client.post(
         "/api/v1/chats",
         json={
-            "user_id": user["id"],
             "model_openrouter_id": "qwen/qwen3.6-plus",
             "system_prompt": "Отвечай кратко.",
         },
@@ -125,14 +133,13 @@ def test_chat_crud_and_message_flow(test_app, monkeypatch):
     assert chat["title"] == "Новый чат"
     assert chat["messages"][0]["role"] == "assistant"
 
-    list_response = client.get(f"/api/v1/chats?user_id={user['id']}")
+    list_response = client.get("/api/v1/chats")
     assert list_response.status_code == 200
     assert len(list_response.json()) == 1
 
     patch_response = client.patch(
         f"/api/v1/chats/{chat['id']}",
         json={
-            "user_id": user["id"],
             "title": "   ",
             "model_openrouter_id": "deepseek/deepseek-v4-flash",
             "system_prompt": "Пиши без воды.",
@@ -146,7 +153,7 @@ def test_chat_crud_and_message_flow(test_app, monkeypatch):
 
     empty_message = client.post(
         f"/api/v1/chats/{chat['id']}/messages",
-        json={"user_id": user["id"], "content": "   "},
+        json={"content": "   "},
     )
     assert empty_message.status_code == 400
 
@@ -164,7 +171,7 @@ def test_chat_crud_and_message_flow(test_app, monkeypatch):
 
     message_response = client.post(
         f"/api/v1/chats/{chat['id']}/messages",
-        json={"user_id": user["id"], "content": "Расскажи про FastAPI"},
+        json={"content": "Расскажи про FastAPI"},
     )
     assert message_response.status_code == 200
     data = message_response.json()
@@ -176,26 +183,23 @@ def test_chat_crud_and_message_flow(test_app, monkeypatch):
         "assistant",
     ]
 
-    delete_response = client.delete(
-        f"/api/v1/chats/{chat['id']}?user_id={user['id']}"
-    )
+    delete_response = client.delete(f"/api/v1/chats/{chat['id']}")
     assert delete_response.status_code == 200
     assert delete_response.json() == {"message": "chat deleted"}
-    assert client.get(f"/api/v1/chats?user_id={user['id']}").json() == []
+    assert client.get("/api/v1/chats").json() == []
 
 
 def test_not_found_and_invalid_model_paths(test_app):
     client, _ = test_app
     user = register_user(client)
-    other = register_user(client, "other")
 
-    missing_user_chats = client.get("/api/v1/chats?user_id=missing")
-    assert missing_user_chats.status_code == 404
+    anonymous_client = TestClient(main.app)
+    unauthorized_chats = anonymous_client.get("/api/v1/chats")
+    assert unauthorized_chats.status_code == 401
 
     invalid_model = client.post(
         "/api/v1/chats",
         json={
-            "user_id": user["id"],
             "model_openrouter_id": "unknown/model",
             "system_prompt": "",
         },
@@ -205,21 +209,41 @@ def test_not_found_and_invalid_model_paths(test_app):
     chat = client.post(
         "/api/v1/chats",
         json={
-            "user_id": user["id"],
             "model_openrouter_id": "qwen/qwen3.6-plus",
             "system_prompt": "",
         },
     ).json()
 
+    other_client = TestClient(main.app)
+    other = register_user(other_client, "other")
+
+    spoofed_create = other_client.post(
+        "/api/v1/chats",
+        json={
+            "user_id": user["id"],
+            "model_openrouter_id": "qwen/qwen3.6-plus",
+            "system_prompt": "",
+        },
+    )
+    assert spoofed_create.status_code == 200
+    assert spoofed_create.json()["user_id"] == other["id"]
+    assert spoofed_create.json()["id"] not in {
+        item["id"] for item in client.get("/api/v1/chats").json()
+    }
+
     wrong_owner_patch = client.patch(
-        f"/api/v1/chats/{chat['id']}",
-        json={"user_id": other["id"], "title": "Чужой чат"},
+        "/api/v1/chats/missing-chat",
+        json={"title": "Чужой чат"},
     )
     assert wrong_owner_patch.status_code == 404
 
-    wrong_owner_delete = client.delete(
-        f"/api/v1/chats/{chat['id']}?user_id={other['id']}"
+    wrong_owner_patch = other_client.patch(
+        f"/api/v1/chats/{chat['id']}",
+        json={"title": "Чужой чат"},
     )
+    assert wrong_owner_patch.status_code == 404
+
+    wrong_owner_delete = other_client.delete(f"/api/v1/chats/{chat['id']}")
     assert wrong_owner_delete.status_code == 404
 
 

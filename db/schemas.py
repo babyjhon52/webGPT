@@ -58,20 +58,17 @@ class ChatRead(SQLModel):
 
 
 class ChatCreate(SQLModel):
-    user_id: str
     model_openrouter_id: str
     system_prompt: str = ""
 
 
 class ChatUpdate(SQLModel):
-    user_id: str
     title: str | None = None
     model_openrouter_id: str | None = None
     system_prompt: str | None = None
 
 
 class MessageCreate(SQLModel):
-    user_id: str
     content: str
 
 

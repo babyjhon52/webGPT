@@ -24,6 +24,16 @@ class User(SQLModel, table=True):
     chats: list["Chat"] = Relationship(back_populates="user")
 
 
+class AuthSession(SQLModel, table=True):
+    __tablename__ = "auth_sessions"
+
+    id: str = Field(default_factory=new_id, primary_key=True)
+    user_id: str = Field(foreign_key="users.id", index=True)
+    token_hash: str = Field(index=True, unique=True)
+    created_at: datetime = Field(default_factory=now_utc)
+    expires_at: datetime = Field(index=True)
+
+
 class Model(SQLModel, table=True):
     __tablename__ = "models"
 

@@ -1,8 +1,9 @@
 from pathlib import Path
+from datetime import timedelta
 import os
 from dotenv import load_dotenv
 from openai import AsyncOpenAI, OpenAIError
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Cookie, Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, select
 
@@ -20,7 +21,12 @@ from db.schemas import (
     UserRead,
     UserRegister,
 )
-from db.security import hash_password, verify_password
+from db.security import (
+    create_session_token,
+    hash_password,
+    hash_session_token,
+    verify_password,
+)
 
 load_dotenv()
 
@@ -37,6 +43,8 @@ client = AsyncOpenAI(
 
 FRONT_DIR = Path(__file__).parent / "front"
 DEFAULT_MODEL_OPENROUTER_ID = "qwen/qwen3.6-plus"
+SESSION_COOKIE_NAME = "bmstugpt_session"
+SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 14
 MODEL_SEEDS = [
     {
         "openrouter_id": "qwen/qwen3.6-plus",
@@ -73,12 +81,72 @@ def seed_models(session: Session) -> None:
     session.commit()
 
 
-def get_user_or_404(user_id: str, session: Session) -> models.User:
-    user = session.get(models.User, user_id)
-    if not user:
+def is_secure_request(request: Request) -> bool:
+    return request.url.scheme == "https"
+
+
+def set_session_cookie(request: Request, response: Response, token: str) -> None:
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        max_age=SESSION_MAX_AGE_SECONDS,
+        httponly=True,
+        secure=is_secure_request(request),
+        samesite="lax",
+        path="/",
+    )
+
+
+def clear_session_cookie(request: Request, response: Response) -> None:
+    response.delete_cookie(
+        key=SESSION_COOKIE_NAME,
+        secure=is_secure_request(request),
+        samesite="lax",
+        path="/",
+    )
+
+
+def create_auth_session(user: models.User, session: Session) -> str:
+    token = create_session_token()
+    auth_session = models.AuthSession(
+        user_id=user.id,
+        token_hash=hash_session_token(token),
+        expires_at=models.now_utc() + timedelta(seconds=SESSION_MAX_AGE_SECONDS),
+    )
+    session.add(auth_session)
+    session.commit()
+    return token
+
+
+def get_current_user(
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+    session: Session = Depends(db.get_session),
+) -> models.User:
+    if not session_token:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Пользователь не найден.",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Войдите в аккаунт.",
+        )
+
+    auth_session = session.exec(
+        select(models.AuthSession).where(
+            models.AuthSession.token_hash == hash_session_token(session_token),
+            models.AuthSession.expires_at > models.now_utc(),
+        )
+    ).first()
+    if not auth_session:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Сессия истекла. Войдите снова.",
+        )
+
+    user = session.get(models.User, auth_session.user_id)
+    if not user:
+        session.delete(auth_session)
+        session.commit()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Сессия недействительна. Войдите снова.",
         )
 
     return user
@@ -218,6 +286,8 @@ def ping():
 @app.post("/api/v1/auth/register")
 def register_user(
     user_data: UserRegister,
+    request: Request,
+    response: Response,
     session: Session = Depends(db.get_session),
 ) -> AuthResponse:
     username = user_data.username.strip()
@@ -256,6 +326,9 @@ def register_user(
     session.commit()
     session.refresh(user)
 
+    token = create_auth_session(user, session)
+    set_session_cookie(request, response, token)
+
     return AuthResponse(
         message="user registered",
         user=UserRead.model_validate(user),
@@ -265,6 +338,8 @@ def register_user(
 @app.post("/api/v1/auth/login")
 def login_user(
     user_data: UserLogin,
+    request: Request,
+    response: Response,
     session: Session = Depends(db.get_session),
 ) -> AuthResponse:
     username = user_data.username.strip()
@@ -279,10 +354,41 @@ def login_user(
             detail="Неверный логин или пароль.",
         )
 
+    token = create_auth_session(user, session)
+    set_session_cookie(request, response, token)
+
     return AuthResponse(
         message="user logged in",
         user=UserRead.model_validate(user),
     )
+
+
+@app.get("/api/v1/auth/me")
+def get_current_user_profile(
+    current_user: models.User = Depends(get_current_user),
+) -> UserRead:
+    return UserRead.model_validate(current_user)
+
+
+@app.post("/api/v1/auth/logout")
+def logout_user(
+    request: Request,
+    response: Response,
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+    session: Session = Depends(db.get_session),
+) -> dict[str, str]:
+    if session_token:
+        auth_session = session.exec(
+            select(models.AuthSession).where(
+                models.AuthSession.token_hash == hash_session_token(session_token)
+            )
+        ).first()
+        if auth_session:
+            session.delete(auth_session)
+            session.commit()
+
+    clear_session_cookie(request, response)
+    return {"message": "user logged out"}
 
 
 @app.get("/api/v1/models")
@@ -297,13 +403,12 @@ def get_models(session: Session = Depends(db.get_session)) -> list[ModelRead]:
 
 @app.get("/api/v1/chats")
 def get_chats(
-    user_id: str,
+    current_user: models.User = Depends(get_current_user),
     session: Session = Depends(db.get_session),
 ) -> list[ChatRead]:
-    get_user_or_404(user_id, session)
     chats = session.exec(
         select(models.Chat)
-        .where(models.Chat.user_id == user_id)
+        .where(models.Chat.user_id == current_user.id)
         .order_by(models.Chat.updated_at.desc())
     ).all()
     return [to_chat_read(chat, session) for chat in chats]
@@ -312,12 +417,12 @@ def get_chats(
 @app.post("/api/v1/chats")
 def create_chat(
     chat_data: ChatCreate,
+    current_user: models.User = Depends(get_current_user),
     session: Session = Depends(db.get_session),
 ) -> ChatRead:
-    user = get_user_or_404(chat_data.user_id, session)
     model = get_model_by_openrouter_id(chat_data.model_openrouter_id, session)
     chat = models.Chat(
-        user_id=user.id,
+        user_id=current_user.id,
         model_id=model.id,
         system_prompt=chat_data.system_prompt.strip(),
     )
@@ -328,7 +433,7 @@ def create_chat(
     greeting = models.Message(
         chat_id=chat.id,
         role="assistant",
-        content=f"Привет, {user.username}! Я готов к диалогу.",
+        content=f"Привет, {current_user.username}! Я готов к диалогу.",
     )
     session.add(greeting)
     session.commit()
@@ -341,9 +446,10 @@ def create_chat(
 def update_chat(
     chat_id: str,
     chat_data: ChatUpdate,
+    current_user: models.User = Depends(get_current_user),
     session: Session = Depends(db.get_session),
 ) -> ChatRead:
-    chat = get_chat_or_404(chat_id, chat_data.user_id, session)
+    chat = get_chat_or_404(chat_id, current_user.id, session)
 
     if chat_data.title is not None:
         chat.title = chat_data.title.strip() or "Новый чат"
@@ -366,10 +472,10 @@ def update_chat(
 @app.delete("/api/v1/chats/{chat_id}")
 def delete_chat(
     chat_id: str,
-    user_id: str,
+    current_user: models.User = Depends(get_current_user),
     session: Session = Depends(db.get_session),
 ) -> dict[str, str]:
-    chat = get_chat_or_404(chat_id, user_id, session)
+    chat = get_chat_or_404(chat_id, current_user.id, session)
     messages = session.exec(
         select(models.Message).where(models.Message.chat_id == chat.id)
     ).all()
@@ -387,9 +493,10 @@ def delete_chat(
 async def send_message(
     chat_id: str,
     message_data: MessageCreate,
+    current_user: models.User = Depends(get_current_user),
     session: Session = Depends(db.get_session),
 ) -> MessageCreateResponse:
-    chat = get_chat_or_404(chat_id, message_data.user_id, session)
+    chat = get_chat_or_404(chat_id, current_user.id, session)
     content = message_data.content.strip()
     if not content:
         raise HTTPException(
